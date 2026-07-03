@@ -1,0 +1,113 @@
+`timescale 1ns/1ps
+
+module main_memory(
+    input  logic        clk,
+    input  logic        reset,
+
+    input  logic        read_req,
+    input  logic        write_req,
+
+    input  logic [31:0] addr,
+    input  logic [31:0] write_data,
+
+    output logic [31:0] read_data,
+    output logic        ready
+);
+
+
+// Main Memory Array
+
+parameter MEM_SIZE = 256;
+
+logic [31:0] memory [0:MEM_SIZE-1];
+
+//latency modal
+
+logic [1:0] delay_counter;
+
+logic pending_read;
+logic pending_write;
+
+logic [31:0] saved_addr;
+logic [31:0] saved_wdata;
+
+integer i;
+
+always_ff @(posedge clk)
+begin
+    if(reset)
+    begin
+        ready <= 0;
+
+        delay_counter <= 0;
+
+        pending_read  <= 0;
+        pending_write <= 0;
+
+        saved_addr  <= 0;
+        saved_wdata <= 0;
+
+        read_data <= 0;
+
+        
+        // Initialize memory contents
+        
+        for(i=0;i<MEM_SIZE;i=i+1)
+            memory[i] <= i + 100;
+
+        
+    end
+    else
+    begin
+
+        ready <= 0;
+
+        
+        // Accept a new request
+        
+
+        if((read_req || write_req) &&
+           !pending_read &&
+           !pending_write)
+        begin
+            pending_read  <= read_req;
+            pending_write <= write_req;
+
+            saved_addr  <= addr;
+            saved_wdata <= write_data;
+
+            delay_counter <= 2;   // 2-cycle memory latency
+        end
+
+        
+        // Countdown latency
+        
+        else if(delay_counter != 0)
+        begin
+            delay_counter <= delay_counter - 1;
+        end
+
+        
+        // Complete transaction
+        
+        else if(pending_read)
+        begin
+            read_data <= memory[saved_addr[31:2]];
+
+            ready <= 1;
+
+            pending_read <= 0;
+        end
+
+        else if(pending_write)
+        begin
+            memory[saved_addr[31:2]] <= saved_wdata;
+
+            ready <= 1;
+
+            pending_write <= 0;
+        end
+    end
+end
+
+endmodule
